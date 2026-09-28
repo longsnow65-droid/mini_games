@@ -365,12 +365,12 @@ def deploy(issue, state):
     log(f"   已推送 {sha[:7]}，等待 GitHub Pages 生效……")
 
     url = game_url(issue)
-    expected = (dest / "index.html").read_bytes()
+    expected = (dest / "index.html").read_bytes().replace(b"\r\n", b"\n")
     live = False
     for _ in range(40):
         try:
             with urllib.request.urlopen(url + f"?v={sha[:7]}", timeout=20) as r:
-                if r.read() == expected:
+                if r.read().replace(b"\r\n", b"\n") == expected:
                     live = True
                     break
         except Exception:
