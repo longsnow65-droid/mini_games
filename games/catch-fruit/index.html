@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>接水果</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #1A1A2E;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  }
+  #stage {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    overflow: hidden;
+  }
+  #stage canvas { position: absolute; left: 0; top: 0; display: block; }
+  .ui { position: absolute; inset: 0; pointer-events: none; }
+  /* HUD */
+  #hud { display: none; z-index: 5; }
+  #hudScore {
+    position: absolute; top: 10px; left: 12px;
+    font-size: 22px; font-weight: 700; color: #fff;
+    text-shadow: -1.5px -1.5px 0 #222, 1.5px -1.5px 0 #222, -1.5px 1.5px 0 #222, 1.5px 1.5px 0 #222, 0 2px 3px rgba(0,0,0,.4);
+  }
+  #hudTime {
+    position: absolute; top: 10px; right: 12px;
+    font-size: 22px; font-weight: 700; color: #fff;
+    text-shadow: -1.5px -1.5px 0 #222, 1.5px -1.5px 0 #222, -1.5px 1.5px 0 #222, 1.5px 1.5px 0 #222, 0 2px 3px rgba(0,0,0,.4);
+  }
+  #hudTime.danger { color: #FF3B30; }
+  /* 炸弹红闪 */
+  #flash {
+    position: absolute; inset: 0; z-index: 8;
+    background: rgba(255, 32, 32, 0.45);
+    opacity: 0; pointer-events: none;
+  }
+  /* 全屏界面 */
+  .screen {
+    position: absolute; inset: 0; z-index: 10;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(10, 20, 40, 0.35);
+    pointer-events: auto; text-align: center;
+  }
+  .screen h1 {
+    font-size: 56px; color: #fff; letter-spacing: 6px;
+    text-shadow: -2px -2px 0 #1d3a5f, 2px -2px 0 #1d3a5f, -2px 2px 0 #1d3a5f, 2px 2px 0 #1d3a5f, 0 4px 8px rgba(0,0,0,.45);
+  }
+  .screen .sub {
+    margin-top: 14px; font-size: 17px; color: #fff;
+    text-shadow: -1px -1px 0 #333, 1px -1px 0 #333, -1px 1px 0 #333, 1px 1px 0 #333;
+  }
+  .screen .best {
+    margin-top: 10px; font-size: 16px; color: #FFE08A;
+    text-shadow: -1px -1px 0 #333, 1px -1px 0 #333, -1px 1px 0 #333, 1px 1px 0 #333;
+  }
+  .screen .big {
+    margin-top: 10px; font-size: 44px; font-weight: 800; color: #fff;
+    text-shadow: -2px -2px 0 #1d3a5f, 2px -2px 0 #1d3a5f, -2px 2px 0 #1d3a5f, 2px 2px 0 #1d3a5f, 0 4px 8px rgba(0,0,0,.45);
+  }
+  #newRecord {
+    margin-top: 8px; font-size: 20px; font-weight: 700; color: #FFD166;
+    text-shadow: -1px -1px 0 #5a3b00, 1px -1px 0 #5a3b00, -1px 1px 0 #5a3b00, 1px 1px 0 #5a3b00;
+  }
+  .btn {
+    margin-top: 34px; padding: 14px 46px;
+    font-size: 24px; font-weight: 700; color: #fff;
+    background: linear-gradient(180deg, #FF9F1C, #F0810F);
+    border: 3px solid #B45E06; border-radius: 999px;
+    box-shadow: 0 5px 0 #B45E06, 0 8px 14px rgba(0,0,0,.35);
+    cursor: pointer; pointer-events: auto;
+    font-family: inherit;
+  }
+  .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #B45E06, 0 4px 8px rgba(0,0,0,.3); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="hud" class="ui">
+    <div id="hudScore">得分: 0</div>
+    <div id="hudTime">剩余: 60s</div>
+  </div>
+  <div id="flash"></div>
+  <div id="ovStart" class="screen">
+    <h1>接水果</h1>
+    <div class="sub">60 秒限时 · 接水果得分 · 躲炸弹</div>
+    <div class="best" id="startBest" style="display:none">最高分: 0</div>
+    <button class="btn" id="btnStart">开始游戏</button>
+  </div>
+  <div id="ovOver" class="screen">
+    <h1>时间到！</h1>
+    <div class="big" id="overScore">得分: 0</div>
+    <div class="best" id="overBest">最高分: 0</div>
+    <div id="newRecord" style="display:none">新纪录！</div>
+    <button class="btn" id="btnRestart">再玩一次</button>
+  </div>
+</div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* ================= 常量 ================= */
+const VW = 11.25, VH = 20, HALF_W = VW / 2;      // 正交视野：9:16，高 20 世界单位
+const BASKET_Y = -8.8;                            // 篮子固定在底部上方 1.2 单位
+const BASKET_LIMIT = 4.52;                        // 篮子中心 x 限位（篮体半宽 1.1，始终留在画面内）
+const RIM_HALF = 0.8;                             // 篮口判定半宽 1.6/2
+const KEY_SPEED = 8, BOT_SPEED = 10;
+
+const qs = new URLSearchParams(location.search);
+const DEMO = qs.get('demo') === '1';
+let DURATION = 60;
+if (qs.has('duration')) {
+  const d = parseFloat(qs.get('duration'));
+  if (isFinite(d)) DURATION = Math.min(600, Math.max(3, d));
+}
+
+/* ================= 场景 ================= */
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-HALF_W, HALF_W, VH / 2, -VH / 2, 0.1, 100);
+camera.position.set(0, 0, 10);
+scene.add(new THREE.AmbientLight(0xffffff, 1));
+
+// 天空渐变背景（canvas 动态生成贴图）
+(function makeSky() {
+  const c = document.createElement('canvas'); c.width = 4; c.height = 512;
+  const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 512);
+  gr.addColorStop(0, '#87CEEB'); gr.addColorStop(1, '#E0F6FF');
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 512);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(VW + 0.1, VH + 0.1), new THREE.MeshBasicMaterial({ map: tex }));
+  m.position.z = -5; scene.add(m);
+})();
+// 草地底部条
+(function makeGrass() {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(VW + 0.1, 1.6), new THREE.MeshBasicMaterial({ color: 0x7EC850 }));
+  m.position.set(0, -10 + 0.8, -4); scene.add(m);
+  const m2 = new THREE.Mesh(new THREE.PlaneGeometry(VW + 0.1, 0.25), new THREE.MeshBasicMaterial({ color: 0x68AE3E }));
+  m2.position.set(0, -10 + 1.6 - 0.125, -3.9); scene.add(m2);
+})();
+
+/* ================= 几何体共享 ================= */
+const geoSphere = new THREE.SphereGeometry(1, 24, 16);
+const geoCyl = new THREE.CylinderGeometry(1, 1, 1, 10);
+const geoBox = new THREE.BoxGeometry(1, 1, 1);
+
+/* ================= 篮子 ================= */
+const basket = new THREE.Group();
+{
+  const mat = new THREE.MeshBasicMaterial({ color: 0xC88A4B });
+  const matEdge = new THREE.MeshBasicMaterial({ color: 0x8B5A2B });
+  const add = (geo, m, sx, sy, sz, x, y) => {
+    const mesh = new THREE.Mesh(geo, m);
+    mesh.scale.set(sx, sy, sz); mesh.position.set(x, y, 0);
+    basket.add(mesh);
+  };
+  add(geoBox, mat, 2.0, 0.9, 0.6, 0, -0.55);          // 主体（底）
+  add(geoBox, mat, 0.2, 1.1, 0.6, -1.0, -0.35);       // 左壁
+  add(geoBox, mat, 0.2, 1.1, 0.6, 1.0, -0.35);        // 右壁
+  add(geoBox, matEdge, 2.4, 0.18, 0.64, 0, 0.09);     // 篮口描边
+  add(geoBox, matEdge, 0.12, 0.55, 0.2, -1.05, 0.42); // 左提手
+  add(geoBox, matEdge, 0.12, 0.55, 0.2, 1.05, 0.42);  // 右提手
+}
+basket.position.set(0, BASKET_Y, 0);
+scene.add(basket);
+
+/* ================= 水果 / 炸弹 ================= */
+const TYPES = {
+  apple: { value: 10, r: 0.6, color: 0xE63946, stem: 0x5D8A3C },
+  orange: { value: 15, r: 0.6, color: 0xFF9F1C, stem: 0x5D8A3C },
+  watermelon: { value: 25, r: 0.9, color: 0x2A9D4A, stem: 0x1F7A38 },
+  bomb: { value: -30, r: 0.6, color: 0x333333 }
+};
+
+function buildVisual(kind) {
+  const t = TYPES[kind];
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(geoSphere, new THREE.MeshBasicMaterial({ color: t.color }));
+  body.scale.setScalar(t.r);
+  g.add(body);
+  if (kind === 'bomb') {
+    const fuse = new THREE.Mesh(geoCyl, new THREE.MeshBasicMaterial({ color: 0x777777 }));
+    fuse.scale.set(0.07, 0.4, 0.07); fuse.position.y = t.r + 0.12;
+    g.add(fuse);
+    const spark = new THREE.Mesh(geoSphere, new THREE.MeshBasicMaterial({ color: 0xFFD166 }));
+    spark.scale.setScalar(0.14); spark.position.y = t.r + 0.4;
+    g.add(spark); g.userData.spark = spark;
+  } else {
+    const stem = new THREE.Mesh(geoCyl, new THREE.MeshBasicMaterial({ color: t.stem }));
+    stem.scale.set(0.07, 0.3, 0.07); stem.position.y = t.r + 0.1;
+    g.add(stem);
+    if (kind === 'watermelon') {
+      for (let i = 0; i < 3; i++) {
+        const stripe = new THREE.Mesh(new THREE.TorusGeometry(t.r * 0.98, 0.05, 8, 32),
+          new THREE.MeshBasicMaterial({ color: 0x1F7A38 }));
+        stripe.rotation.y = i * Math.PI / 3;
+        g.add(stripe);
+      }
+    }
+  }
+  return g;
+}
+
+/* ================= 状态 ================= */
+let state = 'start';
+let score = 0, elapsed = 0, spawnTimer = 0.4;
+let items = [], effects = [];
+let basketX = 0, pointerX = null;
+let flashT = 0, shakeT = 0, autoTimer = 0;
+let autoSpawn = true;                             // 测试钩子：可关闭自然生成
+let best = parseInt(localStorage.getItem('catchFruitBest') || '0', 10) || 0;
+const keys = { left: false, right: false };
+
+/* 自测仪表（不影响玩法） */
+const instr = { spawns: [], catches: [], misses: 0 };
+let lastSpawnT = null;
+
+/* ================= DOM ================= */
+const hud = document.getElementById('hud');
+const hudScore = document.getElementById('hudScore');
+const hudTime = document.getElementById('hudTime');
+const ovStart = document.getElementById('ovStart');
+const ovOver = document.getElementById('ovOver');
+const flashEl = document.getElementById('flash');
+
+/* ================= 工具 ================= */
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+const rand = (a, b) => a + Math.random() * (b - a);
+
+// 难度阶梯（design.md 第 3 节）
+function params(t) {
+  if (t < 20) return { spawnInterval: 0.9, fallSpeed: 3.5, bombRatio: 0.15 };
+  if (t < 40) return { spawnInterval: 0.7, fallSpeed: 4.5, bombRatio: 0.20 };
+  return { spawnInterval: 0.55, fallSpeed: 5.5, bombRatio: 0.25 };
+}
+
+/* ================= 布局 ================= */
+function layout() {
+  const W = window.innerWidth, H = window.innerHeight;
+  let w, h;
+  if (W / H >= 9 / 16) { h = H; w = H * 9 / 16; } else { w = W; h = W * 16 / 9; }
+  w = Math.floor(w); h = Math.floor(h);
+  stage.style.width = w + 'px';
+  stage.style.height = h + 'px';
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', layout);
+layout();
+
+/* ================= 生成与判定 ================= */
+function spawnOne(kind, x, vy) {
+  const p = params(elapsed);
+  if (!kind) {
+    const r = Math.random();
+    if (r < p.bombRatio) kind = 'bomb';
+    else {
+      const f = (r - p.bombRatio) / (1 - p.bombRatio);   // 水果内部权重 50/35/15
+      kind = f < 0.50 ? 'apple' : (f < 0.85 ? 'orange' : 'watermelon');
+    }
+  }
+  const t = TYPES[kind];
+  const vis = buildVisual(kind);
+  const ix = (x !== undefined) ? x : rand(-(HALF_W - t.r - 0.1), HALF_W - t.r - 0.1);
+  const v = (vy !== undefined) ? vy : p.fallSpeed;
+  const y0 = VH / 2 + t.r + 0.3;
+  vis.position.set(ix, y0, 0);
+  scene.add(vis);
+  const item = { kind, value: t.value, r: t.r, x: ix, y: y0, vy: v, group: vis };
+  items.push(item);
+  const now = performance.now() / 1000;
+  instr.spawns.push({ t: now, dt: lastSpawnT === null ? null : now - lastSpawnT, vy: v, kind });
+  lastSpawnT = now;
+  return item;
+}
+
+function popup(text, x, y, color) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const g = c.getContext('2d');
+  g.font = 'bold 64px "PingFang SC", "Microsoft YaHei", sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 10; g.strokeStyle = 'rgba(20,20,20,0.9)';
+  g.strokeText(text, 128, 64); g.fillStyle = color; g.fillText(text, 128, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  sp.scale.set(2.6, 1.3, 1);
+  sp.position.set(x, y, 5);
+  scene.add(sp);
+  effects.push({ sprite: sp, t: 0 });
+}
+
+function removeItem(i) {
+  scene.remove(items[i].group);
+  items.splice(i, 1);
+}
+
+function onCatch(item) {
+  score = Math.max(0, score + item.value);   // 扣分下限保护：不为负
+  hudScore.textContent = '得分: ' + score;
+  if (item.kind === 'bomb') {
+    flashT = 0.3; shakeT = 0.2;
+    popup('-30', item.x, BASKET_Y + 1.6, '#FF6B5E');
+    if (DEMO) instr.misses++;
+  } else {
+    popup('+' + item.value, item.x, BASKET_Y + 1.6, '#FFFFFF');
+  }
+  instr.catches.push({ t: performance.now() / 1000, kind: item.kind, score });
+}
+
+/* ================= 流程控制 ================= */
+function beginRound() {
+  for (const it of items) scene.remove(it.group);
+  items = [];
+  for (const e of effects) scene.remove(e.sprite);
+  effects = [];
+  score = 0; elapsed = 0; spawnTimer = 0.4;
+  basketX = 0; pointerX = null;
+  flashT = 0; shakeT = 0; autoTimer = 0;
+  autoSpawn = true;
+  keys.left = keys.right = false;
+  bot.target = null; bot.reactT = 0; bot.slow = false; bot.speedF = 1; bot.escapeT = 0; bot.escapeX = 0;
+  instr.spawns.length = 0; instr.catches.length = 0; instr.misses = 0;
+  lastSpawnT = null;
+  hudScore.textContent = '得分: 0';
+  hudTime.textContent = '剩余: ' + Math.ceil(DURATION) + 's';
+  hudTime.classList.remove('danger');
+  state = 'playing';
+  updateScreens();
+}
+
+function endRound() {
+  state = 'over';
+  const isNew = score > best;
+  if (isNew) { best = score; localStorage.setItem('catchFruitBest', String(best)); }
+  document.getElementById('overScore').textContent = '得分: ' + score;
+  document.getElementById('overBest').textContent = '最高分: ' + best;
+  document.getElementById('newRecord').style.display = isNew ? 'block' : 'none';
+  if (DEMO) autoTimer = 1.5;   // demo 模式 1.5 秒后自动重开
+  updateScreens();
+}
+
+function updateScreens() {
+  hud.style.display = state === 'playing' ? 'block' : 'none';
+  ovStart.style.display = state === 'start' ? 'flex' : 'none';
+  ovOver.style.display = state === 'over' ? 'flex' : 'none';
+  if (state === 'start') {
+    const sb = document.getElementById('startBest');
+    if (best > 0) { sb.style.display = 'block'; sb.textContent = '最高分: ' + best; }
+    else sb.style.display = 'none';
+  }
+}
+
+/* ================= 输入 ================= */
+function eventWorldX(clientX) {
+  const r = stage.getBoundingClientRect();
+  return clamp(((clientX - r.left) / r.width) * VW - HALF_W, -BASKET_LIMIT, BASKET_LIMIT);
+}
+
+document.addEventListener('mousemove', e => {
+  if (state !== 'playing' || DEMO) return;
+  const r = stage.getBoundingClientRect();
+  if (e.clientX >= r.left && e.clientX <= r.right) pointerX = eventWorldX(e.clientX);
+});
+stage.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (state !== 'playing' || DEMO) return;
+  pointerX = eventWorldX(e.touches[0].clientX);
+}, { passive: false });
+stage.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (state !== 'playing' || DEMO) return;
+  pointerX = eventWorldX(e.touches[0].clientX);
+}, { passive: false });
+stage.addEventListener('touchend', e => { e.preventDefault(); }, { passive: false });
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') { keys.left = true; e.preventDefault(); }
+  else if (e.code === 'ArrowRight' || e.code === 'KeyD') { keys.right = true; e.preventDefault(); }
+  else if (e.code === 'Space' || e.code === 'Enter') {
+    if (state === 'start') { beginRound(); e.preventDefault(); }
+    else if (state === 'over') { beginRound(); e.preventDefault(); }
+  }
+});
+document.addEventListener('keyup', e => {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+  else if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+});
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+document.getElementById('btnStart').addEventListener('click', beginRound);
+document.getElementById('btnRestart').addEventListener('click', beginRound);
+
+/* ================= demo 机器人 ================= */
+const bot = { target: null, reactT: 0, slow: false, speedF: 1, escapeT: 0, escapeX: 0 };
+const BOT_REACH = 4.4;
+
+function botMoveTo(tx, dt, speedMul) {
+  const dx = tx - basketX;
+  const step = BOT_SPEED * bot.speedF * (speedMul || 1) * dt;
+  basketX = Math.abs(dx) <= step ? tx : basketX + Math.sign(dx) * step;
+}
+
+// 选“可达范围内”的最高分水果（炸弹除外；轨迹与炸弹重叠则放弃）
+function botPickTarget() {
+  let bestIt = null, bestEta = Infinity;
+  for (const it of items) {
+    if (it.kind === 'bomb') continue;
+    const tx = clamp(it.x, -BOT_REACH, BOT_REACH);
+    const eta = (it.y - BASKET_Y) / it.vy;
+    const need = Math.abs(tx - basketX) / BOT_SPEED + 0.05;
+    if (need > eta) continue;                       // 追不上
+    let blocked = false;
+    for (const b of items) {
+      if (b.kind !== 'bomb') continue;
+      const etaB = (b.y - BASKET_Y) / b.vy;
+      if (Math.abs(b.x - tx) < 1.2 && Math.abs(etaB - eta) < 0.7) { blocked = true; break; }
+    }
+    if (blocked) continue;
+    if (!bestIt || it.value > bestIt.value || (it.value === bestIt.value && eta < bestEta)) {
+      bestIt = it; bestEta = eta;
+    }
+  }
+  return bestIt;
+}
+
+function botUpdate(dt) {
+  // 1. 逃跑状态：持续移动到位
+  if (bot.escapeT > 0) {
+    bot.escapeT -= dt;
+    botMoveTo(bot.escapeX, dt, 1);
+    return;
+  }
+  // 2. 炸弹威胁：仅当炸弹即将落地（<1.0s）且横向距离 < 1.2 才躲避
+  for (const b of items) {
+    if (b.kind !== 'bomb') continue;
+    const etaB = (b.y - BASKET_Y) / b.vy;
+    if (etaB < 1.0 && Math.abs(b.x - basketX) < 1.2) {
+      bot.escapeT = 0.45;
+      bot.escapeX = clamp(basketX <= b.x ? b.x - 1.6 : b.x + 1.6, -BOT_REACH, BOT_REACH);
+      bot.target = null;
+      return;
+    }
+  }
+  // 3. 目标失效（被接/落出/尚无目标）才重选，模拟 0.1s 反应延迟
+  if (!bot.target || items.indexOf(bot.target) === -1) {
+    bot.target = botPickTarget();
+    bot.reactT = 0.1;
+    bot.slow = Math.random() < 0.10;                // 10% 概率“愣一下”（慢一点）
+    bot.speedF = rand(0.9, 1.1);                    // ±10% 速度扰动
+  }
+  if (!bot.target) { botMoveTo(0, dt, 0.6); return; }   // 场上没水果时回中
+  if (bot.reactT > 0) { bot.reactT -= dt; return; }
+  botMoveTo(clamp(bot.target.x, -BOT_REACH, BOT_REACH), dt, bot.slow ? 0.55 : 1);
+}
+
+/* ================= 主循环 ================= */
+let prevT = performance.now();
+let simT = 0;
+
+function tick(nowMs) {
+  requestAnimationFrame(tick);
+  const dt = Math.min((nowMs - prevT) / 1000, 0.05);
+  prevT = nowMs;
+  simT += dt;
+
+  if (state === 'playing') {
+    elapsed += dt;
+    // 生成
+    const p = params(elapsed);
+    if (autoSpawn) {
+      spawnTimer -= dt;
+      while (spawnTimer <= 0) { spawnOne(); spawnTimer += p.spawnInterval; }
+    }
+    // 横移
+    if (DEMO) {
+      botUpdate(dt);
+    } else {
+      const dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+      if (dir !== 0) { basketX += dir * KEY_SPEED * dt; pointerX = null; }
+      else if (pointerX !== null) basketX = pointerX;   // 直接映射，零延迟
+      basketX = clamp(basketX, -BASKET_LIMIT, BASKET_LIMIT);
+    }
+    basket.position.x = basketX;
+    // 物体下落与判定
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      it.y -= it.vy * dt;
+      it.group.position.y = it.y;
+      if (it.kind === 'bomb' && it.group.userData.spark) {
+        it.group.userData.spark.scale.setScalar(0.11 + 0.05 * Math.abs(Math.sin(simT * 18)));
+      }
+      if (it.y <= BASKET_Y) {
+        if (Math.abs(it.x - basketX) <= RIM_HALF) { onCatch(it); removeItem(i); continue; }
+        if (it.y < BASKET_Y - 0.7) { removeItem(i); continue; }   // 漏接落出，不扣分
+      } else if (it.y < -(VH / 2) - 1.5) { removeItem(i); continue; }
+    }
+    // 倒计时
+    const remain = DURATION - elapsed;
+    hudTime.textContent = '剩余: ' + Math.max(0, Math.ceil(remain)) + 's';
+    if (remain <= 10) hudTime.classList.add('danger');
+    else hudTime.classList.remove('danger');
+    if (remain <= 0) endRound();
+  } else if (state === 'over' && DEMO && autoTimer > 0) {
+    autoTimer -= dt;
+    if (autoTimer <= 0) beginRound();
+  }
+
+  // 跳字动效：0.6 秒上浮渐隐
+  for (let i = effects.length - 1; i >= 0; i--) {
+    const e = effects[i];
+    e.t += dt;
+    e.sprite.position.y += 1.6 * dt;
+    e.sprite.material.opacity = Math.max(0, 1 - e.t / 0.6);
+    if (e.t >= 0.6) { scene.remove(e.sprite); effects.splice(i, 1); }
+  }
+  // 炸弹红闪 0.3 秒淡出
+  if (flashT > 0) { flashT -= dt; flashEl.style.opacity = Math.max(0, flashT / 0.3) * 0.45; }
+  else flashEl.style.opacity = 0;
+  // 画面震动 0.2 秒
+  if (shakeT > 0) { shakeT -= dt; camera.position.x = rand(-0.15, 0.15); }
+  else camera.position.x = 0;
+
+  renderer.render(scene, camera);
+}
+
+/* ================= 对外接口 ================= */
+window.__game = {
+  get state() { return state; },
+  get score() { return score; },
+  get best() { return best; },
+  start() { beginRound(); },
+  restart() { beginRound(); },
+  // —— 以下为自测/录屏辅助（design 验收清单第 4、6 条依赖）——
+  get timeLeft() { return Math.max(0, DURATION - elapsed); },
+  get elapsed() { return elapsed; },
+  get duration() { return DURATION; },
+  get basketX() { return basketX; },
+  get itemCount() { return items.length; },
+  itemsInfo() { return items.map(it => ({ kind: it.kind, x: it.x, y: it.y, vy: it.vy })); },
+  spawn(kind, x, vy) { return spawnOne(kind, x, vy); },
+  difficultyAt(t) { return params(t); },
+  setAutoSpawn(v) { autoSpawn = !!v; },
+  instr
+};
+
+updateScreens();
+if (DEMO) beginRound();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

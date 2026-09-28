@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "issue": "01",
+    "slug": "catch-fruit",
+    "title": "接水果",
+    "tagline": "60 秒手速挑战，接水果躲炸弹冲高分。",
+    "how_to_play": "手指拖动（电脑用鼠标或 ← → / A D 键）控制篮子左右移动，接苹果 +10、橙子 +15、西瓜 +25，接到炸弹 −30 分。60 秒倒计时结束按得分结算，冲击你的最高分纪录。",
+    "tags": [
+      "#休闲小游戏",
+      "#手速挑战",
+      "#接水果"
+    ],
+    "url": "games/catch-fruit/",
+    "video": "games/catch-fruit/demo.mp4",
+    "cover": "games/catch-fruit/cover.jpg",
+    "published_at": "2026-09-28"
+  }
+]
