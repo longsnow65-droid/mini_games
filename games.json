@@ -14,5 +14,21 @@
     "video": "games/catch-fruit/demo.mp4",
     "cover": "games/catch-fruit/cover.jpg",
     "published_at": "2026-09-28"
+  },
+  {
+    "issue": "02",
+    "slug": "breakout",
+    "title": "打砖块",
+    "tagline": "3 条命清空 40 块砖，你敢挑战吗？",
+    "how_to_play": "手指拖动（电脑用鼠标或 ← → / A D 键）移动挡板接球反弹，击碎砖块得分，越靠上的行分值越高，碎得越多球速越快、挡板越窄。漏球扣 1 条命，3 条命用完游戏结束；清空全部 40 块砖即过关，还能拿 200 分奖励。",
+    "tags": [
+      "#休闲小游戏",
+      "#打砖块",
+      "#解压神器"
+    ],
+    "url": "games/breakout/",
+    "video": "games/breakout/demo.mp4",
+    "cover": "games/breakout/cover.jpg",
+    "published_at": "2026-09-28"
   }
 ]
