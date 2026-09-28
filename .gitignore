@@ -2,3 +2,4 @@ factory/.work/
 __pycache__/
 *.pyc
 set_kimi_key.ps1
+docs/architecture/
