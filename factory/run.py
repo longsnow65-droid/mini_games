@@ -71,15 +71,28 @@ def game_url(issue):
 
 # ---------- 进度 ----------
 
+_STATE_SHA = {}  # 期号 → 本进程最后一次读到或写入的 state.json 哈希，用于防止并发覆盖
+
+
 def load_state(issue):
-    raw = kha.read_memory_by_path(PIPE, f"{issue_dir(issue)}/state.json")
-    if raw:
-        return json.loads(raw)
+    path = f"{issue_dir(issue)}/state.json"
+    meta = kha.list_memories(PIPE).get(path)
+    if meta:
+        _STATE_SHA[issue["issue"]] = meta["content_sha256"]
+        return json.loads(kha.read_memory(PIPE, meta["id"]))
     return {"issue": issue["issue"], "step": "design", "build_round": 0, "feedback": None, "history": []}
 
 
 def save_state(issue, state):
-    kha.write_memory(PIPE, f"{issue_dir(issue)}/state.json", json.dumps(state, ensure_ascii=False, indent=2))
+    try:
+        saved = kha.write_memory(PIPE, f"{issue_dir(issue)}/state.json", json.dumps(state, ensure_ascii=False, indent=2),
+                                 expected_sha=_STATE_SHA.get(issue["issue"]))
+    except kha.KHAError as e:
+        if e.status == 409:
+            sys.exit("⛔ 进度已被另一个进程更新（可能有两个脚本在同时运行）。本进程停止，未覆盖进度。"
+                     f"\n请先确认只有一个脚本在运行，再执行：python factory/run.py status {issue['issue']}")
+        raise
+    _STATE_SHA[issue["issue"]] = saved["content_sha256"]
 
 
 def record(state, **event):
@@ -292,10 +305,11 @@ def decide_approve(issue, state, verdict, reason="", to="marketer"):
 
 
 def ask(prompt):
+    """读取一行回答；读不到输入时返回 None（调用方据此放弃决定，绝不默认成打回或驳回）。"""
     try:
         return input(prompt).strip()
-    except EOFError:
-        return ""
+    except (EOFError, KeyboardInterrupt):
+        return None
 
 
 def interactive_gate(step, issue, state):
@@ -304,26 +318,52 @@ def interactive_gate(step, issue, state):
         gate_review_prepare(issue)
     else:
         gate_approve_prepare(issue)
-    if not sys.stdin.isatty():
-        n = issue["issue"]
-        cmds = (f"  python factory/run.py review {n} pass\n  python factory/run.py review {n} reject \"理由\""
-                if step == "review" else
-                f"  python factory/run.py approve {n} yes\n  python factory/run.py approve {n} no \"理由\" --to marketer|builder")
-        print(f"\n⏸ 等待{STEP_NAMES[step]}。做出决定后运行：\n{cmds}")
+    n = issue["issue"]
+    cmds = (f"  python factory/run.py review {n} pass\n  python factory/run.py review {n} reject \"理由\""
+            if step == "review" else
+            f"  python factory/run.py approve {n} yes\n  python factory/run.py approve {n} no \"理由\" --to marketer|builder")
+    waiting = f"\n⏸ 等待{STEP_NAMES[step]}。做出决定后运行：\n{cmds}"
+    # 只有输入输出都连着真实终端才当场提问；后台运行或输出被管道转发时一律退出等命令。
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        print(waiting)
         return False
+
+    def ask_choice(prompt, choices):
+        while True:
+            ans = ask(prompt)
+            if ans is None:
+                return None
+            if ans.lower() in choices:
+                return ans.lower()
+            print(f"请输入 {' 或 '.join(choices)}。")
+
+    def ask_reason(prompt):
+        while True:
+            ans = ask(prompt)
+            if ans is None or ans:
+                return ans
+            print("理由不能为空。")
+
     if step == "review":
-        ans = ask("\n试玩后，是否通过？[y 通过 / n 打回]：").lower()
-        if ans == "y":
-            decide_review(issue, state, "pass")
-        else:
-            decide_review(issue, state, "reject", ask("打回理由：") or "未说明")
+        ans = ask_choice("\n试玩后，是否通过？[y 通过 / n 打回]：", ("y", "n"))
+        reason = ask_reason("打回理由：") if ans == "n" else ""
+        if ans is None or reason is None:
+            print(waiting)
+            return False
+        decide_review(issue, state, "pass" if ans == "y" else "reject", reason)
     else:
-        ans = ask("\n是否批准上线？[y 批准 / n 驳回]：").lower()
+        ans = ask_choice("\n是否批准上线？[y 批准 / n 驳回]：", ("y", "n"))
+        to = reason = ""
+        if ans == "n":
+            to = ask_choice("问题出在游戏本身吗？[y 退回制作官 / n 退回营销官]：", ("y", "n"))
+            reason = ask_reason("驳回理由：") if to else None
+        if ans is None or to is None or reason is None:
+            print(waiting)
+            return False
         if ans == "y":
             decide_approve(issue, state, "yes")
         else:
-            to = "builder" if ask("问题出在游戏本身吗？[y 退回制作官 / n 退回营销官]：").lower() == "y" else "marketer"
-            decide_approve(issue, state, "no", ask("驳回理由：") or "未说明", to)
+            decide_approve(issue, state, "no", reason, "builder" if to == "y" else "marketer")
     return True
 
 

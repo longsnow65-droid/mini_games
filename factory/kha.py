@@ -105,8 +105,11 @@ def read_memory_by_path(store_id, path, index=None):
     return read_memory(store_id, meta["id"]) if meta else None
 
 
-def write_memory(store_id, path, content, index=None):
-    """按路径写入（存在则更新，不存在则创建）。content 为 bytes 或 str。"""
+def write_memory(store_id, path, content, index=None, expected_sha=None):
+    """按路径写入（存在则更新，不存在则创建）。content 为 bytes 或 str。
+
+    expected_sha：调用方读取时看到的内容哈希；文件已被别处改过时平台返回 409，不会覆盖。
+    """
     if isinstance(content, str):
         content = content.encode("utf-8")
     b64 = base64.b64encode(content).decode("ascii")
@@ -114,7 +117,7 @@ def write_memory(store_id, path, content, index=None):
     meta = index.get(path)
     if meta:
         return request("PATCH", f"/v1/memory-stores/{store_id}/memories/{meta['id']}",
-                       {"content": b64, "content_sha256": meta["content_sha256"]})
+                       {"content": b64, "content_sha256": expected_sha or meta["content_sha256"]})
     return request("POST", f"/v1/memory-stores/{store_id}/memories", {"path": path, "content": b64})
 
 
