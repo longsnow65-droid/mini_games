@@ -1,0 +1,18 @@
+{
+  "github": {
+    "owner": "longsnow65-droid",
+    "repo": "mini_games",
+    "pages_base": "https://longsnow65-droid.github.io/mini_games/"
+  },
+  "kha": {
+    "environment_id": "env_01m3kfb17nfr1bdsm3q91kxnrc",
+    "pipeline_store_id": "mstr_01m3kfkazvefe8kzsct9anp7hj",
+    "journal_store_id": "mstr_01m3kfkbnse07a3tecfwpx0caj",
+    "agents": {
+      "idea": "agent_01m3kfkc75fe9tmnkzrp3e5q2p",
+      "builder": "agent_01m3kfkcbee0jr7vwm1dezs5s0",
+      "marketer": "agent_01m3kfkcfje8at4zekvhyv6pmy",
+      "publisher": "agent_01m3kfkckmfw69a0kjepjf4amk"
+    }
+  }
+}
