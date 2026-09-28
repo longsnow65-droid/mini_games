@@ -13,6 +13,7 @@
 import argparse
 import datetime as dt
 import json
+import os
 import subprocess
 import sys
 import time
@@ -255,22 +256,38 @@ def download(issue, rels, sub):
     return out, got
 
 
+def open_file(path):
+    """用系统默认程序打开网页或视频，不等待其退出；打不开只提示，不阻塞流程。"""
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(path))
+        else:
+            webbrowser.open(path.as_uri())
+    except OSError as e:
+        log(f"   ⚠️ 无法自动打开 {path.name}：{e}，请手动打开。")
+
+
 def gate_review_prepare(issue):
     out, got = download(issue, ["game.html", "selftest.md", "selftest/", "design.md"], "review")
     log(f"闸 1 试玩复核：文件已下载到 {out}")
     if "game.html" in got:
-        webbrowser.open(got["game.html"].as_uri())
-        log("   已在浏览器打开游戏。建议再用浏览器开发者工具切到手机视图试一试。")
+        open_file(got["game.html"])
+        log("   已打开游戏。建议再用浏览器开发者工具切到手机视图试一试。")
     if "selftest.md" in got:
-        webbrowser.open(got["selftest.md"].as_uri())
+        log(f"   自测记录：{got['selftest.md']}")
 
 
 def gate_approve_prepare(issue):
     out, got = download(issue, ["release/"], "approve")
     log(f"闸 2 上线批准：发布包已下载到 {out / 'release'}")
-    for name in ("release/demo.mp4", "release/discord_draft.md", "release/checklist.md", "release/card.json"):
+    if "release/demo.mp4" in got:
+        open_file(got["release/demo.mp4"])
+        log("   已打开演示视频。")
+    for name in ("release/card.json", "release/discord_draft.md"):
         if name in got:
-            webbrowser.open(got[name].as_uri())
+            print(f"\n----- {name} -----\n{got[name].read_text(encoding='utf-8').strip()}")
+    if "release/checklist.md" in got:
+        log(f"   发布官核对清单：{got['release/checklist.md']}")
 
 
 def decide_review(issue, state, verdict, reason=""):
