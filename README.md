@@ -6,8 +6,8 @@
 
 | 期号 | 游戏 | 状态 |
 |-|-|-|
-| 01 | 接水果 | 生产中 |
-| 02 | 打砖块 | 排队中 |
+| 01 | [接水果](https://longsnow65-droid.github.io/mini_games/games/catch-fruit/) | 已上线 |
+| 02 | [打砖块](https://longsnow65-droid.github.io/mini_games/games/breakout/) | 已上线 |
 
 ## 目录
 
